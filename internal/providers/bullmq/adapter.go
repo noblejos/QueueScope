@@ -62,6 +62,12 @@ func (a *Adapter) ListQueues(ctx context.Context, connection domain.QueueConnect
 	if err != nil {
 		return nil, err
 	}
+	if len(keys) == 0 {
+		keys, err = discoverQueueKeysFromKnownStateKeys(ctx, client, prefix)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	queues := make([]domain.QueueInfo, 0, len(keys))
 	for _, key := range keys {
@@ -274,6 +280,39 @@ func scanKeys(ctx context.Context, client *redis.Client, pattern string) ([]stri
 	}
 
 	return keys, nil
+}
+
+func discoverQueueKeysFromKnownStateKeys(ctx context.Context, client *redis.Client, prefix string) ([]string, error) {
+	stateKeys, err := scanKeys(ctx, client, prefix+":*")
+	if err != nil {
+		return nil, err
+	}
+
+	queueNames := map[string]struct{}{}
+	for _, key := range stateKeys {
+		parts := strings.Split(key, ":")
+		if len(parts) < 3 || parts[0] != prefix {
+			continue
+		}
+		if isKnownQueueSuffix(parts[len(parts)-1]) {
+			queueNames[parts[1]] = struct{}{}
+		}
+	}
+
+	keys := make([]string, 0, len(queueNames))
+	for queueName := range queueNames {
+		keys = append(keys, queueKey(prefix, queueName, "meta"))
+	}
+	return keys, nil
+}
+
+func isKnownQueueSuffix(suffix string) bool {
+	switch suffix {
+	case "wait", "active", "paused", "delayed", "failed", "completed", "prioritized", "events", "marker":
+		return true
+	default:
+		return false
+	}
 }
 
 func queueStats(ctx context.Context, client *redis.Client, prefix string, queueName string) (domain.QueueStats, error) {

@@ -176,12 +176,17 @@ func (s *Server) handleCreateConnection(c *gin.Context) {
 	if payload.Config == nil {
 		payload.Config = map[string]interface{}{}
 	}
+	validatedConfig, err := config.ValidateConnectionConfig(payload.Provider, payload.Config)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	connection, err := s.store.Create(c.Request.Context(), domain.QueueConnection{
 		Name:     strings.TrimSpace(payload.Name),
 		Provider: payload.Provider,
 		Mode:     mode,
-		Config:   payload.Config,
+		Config:   validatedConfig,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create connection"})
@@ -242,7 +247,7 @@ func (s *Server) handleListQueues(c *gin.Context) {
 
 	queues, err := adapter.ListQueues(c.Request.Context(), connection)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not list queues"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not list queues: " + err.Error()})
 		return
 	}
 
@@ -263,7 +268,7 @@ func (s *Server) handleListMessages(c *gin.Context) {
 
 	messages, err := adapter.ListMessages(c.Request.Context(), connection, c.Param("queueName"), filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not list messages"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not list messages: " + err.Error()})
 		return
 	}
 

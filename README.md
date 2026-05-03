@@ -18,7 +18,10 @@ Start local services:
 
 ```sh
 docker compose up -d postgres redis rabbitmq
+docker compose ps
 ```
+
+If Postgres is still starting, the backend will wait and retry briefly before failing.
 
 Run the backend:
 
@@ -51,6 +54,36 @@ Use this QueueScope connection config for the demo:
 {
   "redisUrl": "redis://localhost:6379",
   "prefix": "bull"
+}
+```
+
+## Connection Configs
+
+BullMQ / Redis:
+
+```json
+{
+  "redisUrl": "redis://localhost:6379",
+  "prefix": "bull"
+}
+```
+
+Amazon SQS:
+
+```json
+{
+  "region": "us-east-1",
+  "queueUrl": "https://sqs.us-east-1.amazonaws.com/123456789012/my-queue",
+  "profile": "default"
+}
+```
+
+RabbitMQ:
+
+```json
+{
+  "amqpUrl": "amqp://queuescope:queuescope@localhost:5672",
+  "vhost": "/"
 }
 ```
 

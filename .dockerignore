@@ -1,0 +1,13 @@
+.git
+.cache
+data
+*.db
+*.sqlite
+*.sqlite3
+
+web/node_modules
+web/dist
+web/tsconfig.tsbuildinfo
+
+demo/bullmq/node_modules
+

@@ -35,6 +35,32 @@ import {
 } from "./lib/api";
 
 const defaultEmail = "admin@queuescope.local";
+const providerConfigTemplates: Record<ProviderInfo["id"], string> = {
+  bullmq: JSON.stringify({ redisUrl: "redis://localhost:6379", prefix: "bull" }, null, 2),
+  sqs: JSON.stringify(
+    {
+      region: "us-east-1",
+      queueUrl: "https://sqs.us-east-1.amazonaws.com/123456789012/my-queue",
+      profile: "default"
+    },
+    null,
+    2
+  ),
+  rabbitmq: JSON.stringify(
+    {
+      amqpUrl: "amqp://queuescope:queuescope@localhost:5672",
+      vhost: "/"
+    },
+    null,
+    2
+  )
+};
+
+const providerConfigHints: Record<ProviderInfo["id"], string> = {
+  bullmq: "Requires redisUrl. Optional prefix defaults to bull.",
+  sqs: "Requires region and queueUrl. Optional profile or endpointUrl can be included.",
+  rabbitmq: "Requires amqpUrl. Optional vhost defaults to /."
+};
 
 export function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -43,13 +69,15 @@ export function App() {
   const [connectionName, setConnectionName] = useState("Local BullMQ");
   const [connectionProvider, setConnectionProvider] = useState<ProviderInfo["id"]>("bullmq");
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>("read_only");
-  const [connectionConfig, setConnectionConfig] = useState('{"redisUrl":"redis://localhost:6379"}');
+  const [connectionConfig, setConnectionConfig] = useState(providerConfigTemplates.bullmq);
   const [health, setHealth] = useState<Record<string, ConnectionHealth>>({});
   const [selectedConnectionId, setSelectedConnectionId] = useState("");
   const [queues, setQueues] = useState<QueueInfo[]>([]);
   const [selectedQueue, setSelectedQueue] = useState("");
   const [messageStatus, setMessageStatus] = useState<MessageStatus>("failed");
   const [messages, setMessages] = useState<QueueMessage[]>([]);
+  const [queueLoading, setQueueLoading] = useState(false);
+  const [messageLoading, setMessageLoading] = useState(false);
   const [auditEntries, setAuditEntries] = useState<AuditLogEntry[]>([]);
   const [email, setEmail] = useState(defaultEmail);
   const [password, setPassword] = useState("queuescope");
@@ -130,14 +158,21 @@ export function App() {
     }
 
     setError("");
+    setQueueLoading(true);
     try {
       const result = await getQueues(connectionId);
       setQueues(result.queues);
       setSelectedConnectionId(connectionId);
-      setSelectedQueue(result.queues[0]?.name ?? "");
+      const firstQueue = result.queues[0]?.name ?? "";
+      setSelectedQueue(firstQueue);
       setMessages([]);
+      if (firstQueue) {
+        await loadMessages(connectionId, firstQueue, messageStatus);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load queues");
+    } finally {
+      setQueueLoading(false);
     }
   }
 
@@ -148,12 +183,19 @@ export function App() {
     }
 
     setError("");
+    await loadMessages(selectedConnectionId, queueName, messageStatus);
+  }
+
+  async function loadMessages(connectionId: string, queueName: string, status: MessageStatus) {
+    setMessageLoading(true);
     try {
-      const result = await getMessages(selectedConnectionId, queueName, messageStatus);
+      const result = await getMessages(connectionId, queueName, status);
       setMessages(result.messages);
       setSelectedQueue(queueName);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load messages");
+    } finally {
+      setMessageLoading(false);
     }
   }
 
@@ -312,7 +354,12 @@ export function App() {
               Provider
               <select
                 value={connectionProvider}
-                onChange={(event) => setConnectionProvider(event.target.value as ProviderInfo["id"])}
+                onChange={(event) => {
+                  const provider = event.target.value as ProviderInfo["id"];
+                  setConnectionProvider(provider);
+                  setConnectionConfig(providerConfigTemplates[provider]);
+                  setConnectionName(defaultConnectionName(provider));
+                }}
               >
                 {providers.map((provider) => (
                   <option key={provider.id} value={provider.id}>
@@ -340,6 +387,7 @@ export function App() {
                 value={connectionConfig}
                 onChange={(event) => setConnectionConfig(event.target.value)}
               />
+              <span className="field-hint">{providerConfigHints[connectionProvider]}</span>
             </label>
 
             <button type="submit">
@@ -416,13 +464,17 @@ export function App() {
             </label>
             <button type="button" onClick={() => handleLoadQueues()}>
               <RefreshCw size={15} />
-              Load queues
+              {queueLoading ? "Loading..." : "Load queues"}
             </button>
           </div>
 
           <div className="queue-grid">
             <div className="queue-list">
-              {queues.length === 0 && <div className="empty-state">No queues loaded.</div>}
+              {queues.length === 0 && (
+                <div className="empty-state">
+                  No queues found. Seed BullMQ demo data, then load queues again.
+                </div>
+              )}
               {queues.map((queue) => (
                 <button
                   type="button"
@@ -430,7 +482,7 @@ export function App() {
                   key={queue.id}
                   onClick={() => {
                     setSelectedQueue(queue.name);
-                    void handleLoadMessages(queue.name);
+                    void loadMessages(selectedConnectionId, queue.name, messageStatus);
                   }}
                 >
                   <strong>{queue.name}</strong>
@@ -455,12 +507,16 @@ export function App() {
                 </select>
                 <button type="button" onClick={() => handleLoadMessages()}>
                   <RefreshCw size={15} />
-                  Load messages
+                  {messageLoading ? "Loading..." : "Load messages"}
                 </button>
               </div>
 
               <div className="message-list">
-                {messages.length === 0 && <div className="empty-state">No messages loaded.</div>}
+                {messages.length === 0 && (
+                  <div className="empty-state">
+                    No {messageStatus} messages found for the selected queue.
+                  </div>
+                )}
                 {messages.map((message) => (
                   <article className="message-row" key={`${message.queueName}-${message.id}`}>
                     <header>
@@ -543,4 +599,15 @@ export function App() {
       </section>
     </main>
   );
+}
+
+function defaultConnectionName(provider: ProviderInfo["id"]) {
+  switch (provider) {
+    case "bullmq":
+      return "Local BullMQ";
+    case "sqs":
+      return "Production SQS";
+    case "rabbitmq":
+      return "Local RabbitMQ";
+  }
 }
