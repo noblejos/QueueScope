@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: queuescope
+      POSTGRES_PASSWORD: queuescope
+      POSTGRES_DB: queuescope
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: queuescope
+      RABBITMQ_DEFAULT_PASS: queuescope
+
+volumes:
+  postgres-data:

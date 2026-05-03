@@ -1,0 +1,16 @@
+{
+  "name": "@queuescope/demo-bullmq",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "seed": "node seed.js",
+    "worker": "node worker.js",
+    "drain": "node drain.js"
+  },
+  "dependencies": {
+    "bullmq": "^5.65.1",
+    "ioredis": "^5.8.2"
+  }
+}
+

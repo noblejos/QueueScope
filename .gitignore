@@ -26,6 +26,21 @@ go.work.sum
 
 # env file
 .env
+.env.*
+!.env.example
+
+# Frontend
+node_modules/
+web/node_modules/
+web/dist/
+web/tsconfig.tsbuildinfo
+
+# Local data
+.cache/
+data/
+*.db
+*.sqlite
+*.sqlite3
 
 # Editor/IDE
 # .idea/
@@ -33,3 +48,5 @@ go.work.sum
 
 queue
 queue-visualizer.md
+SPEC.md
+SPEC.md
